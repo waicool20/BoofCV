@@ -63,9 +63,9 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 	double cornerIntensityThreshold = 1.0;
 
 	public float nonmaxThresholdRatio = 0.05f;
-	public double edgeIntensityRatioThreshold = 0.01;
-	public double edgeAspectRatioThreshold = 0.1;
-	public double cornerIntensity = 10;
+	public double edgeIntensityRatioThreshold = 0.005;
+	public double edgeAspectRatioThreshold = 0.1; // TODO try increasing this
+	public double cornerIntensity = 0;
 	/**
 	 * Tolerance number of "spokes" in the wheel which break symmetry. Symmetry is defined as both sides being above
 	 * or below the mean value. Larger the value more tolerant it is.
@@ -89,6 +89,9 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 //	FastQueue<Point2D_F32> maximums = new FastQueue<>(Point2D_F32.class,true);
 	private FastQueue<ChessboardCorner> corners = new FastQueue<>(ChessboardCorner.class,true);
 	List<ChessboardCorner> filtered = new ArrayList<>();
+
+
+	SaddlePointXCorner saddle = new SaddlePointXCorner();
 
 	// storage for corner detector output
 	GrayF32 intensity = new GrayF32(1,1);
@@ -168,6 +171,8 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 		DiscretizedCircle.coordinates(4, outsideCircle4);
 		DiscretizedCircle.coordinates(3, outsideCircle3);
 		outsideCircleValues = new float[ outsideCircle4.size ];
+
+		saddle.setRadius(3);
 	}
 
 	/**
@@ -179,6 +184,8 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 		filtered.clear();
 		corners.reset();
 		foundNonmax.reset();
+
+		saddle.setImage((GrayF32)input);
 
 //		System.out.println("ENTER CHESSBOARD CORNER "+input.width+" x "+input.height);
 		borderImg.setImage(input);
@@ -222,6 +229,14 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 			int xx = (int)(c.x+0.5f);
 			int yy = (int)(c.y+0.5f);
 
+			if( !checkHessian(xx,yy) )
+				continue;
+
+			// TODO Remove as many arbitrary thresholds as possible
+			// TODO Check to see if hessian peak too
+			// TODO keep check to see if shi-tomasi corner?
+			// TODO Find the two lines that form the X. Use as to find orientation and prune
+
 			if( !checkPositiveInside(xx,yy,4) ) {
 				continue;
 			}
@@ -231,13 +246,13 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 			}
 
 			// TODO improve these functions
-			if (!checkChessboardCircle((float) c.x, (float) c.y, outsideCircle4, 3, 6, symmetricTol)) {
-				continue;
-			}
-
-			if (!checkChessboardCircle((float) c.x, (float) c.y, outsideCircle3, 3, 4, symmetricTol)) {
-				continue;
-			}
+//			if (!checkChessboardCircle((float) c.x, (float) c.y, outsideCircle4, 3, 6, symmetricTol)) {
+//				continue;
+//			}
+//
+//			if (!checkChessboardCircle((float) c.x, (float) c.y, outsideCircle3, 3, 4, symmetricTol)) {
+//				continue;
+//			}
 
 			if( useMeanShift ) {
 				// TODO improve localization using KLT feature intensity?
@@ -248,11 +263,17 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 				c.y = meanShift.getPeakY();
 			}
 
+//			if( !saddle.process((int)(c.x+0.5),(int)(c.y+0.5))) {
+//				continue;
+//			}
+//			if( c.distance(saddle.saddleX,saddle.saddleY) > 2 )
+//				continue;
+
 			// tighter tolerance now that the center is known
-			if (!checkChessboardCircle((float) c.x, (float) c.y, outsideCircle4, 4, 4, symmetricTol-1)) {
-				c.edgeIntensity = -1;
-				continue;
-			}
+//			if (!checkChessboardCircle((float) c.x, (float) c.y, outsideCircle4, 4, 4, symmetricTol-1)) {
+//				c.edgeIntensity = -1;
+//				continue;
+//			}
 
 			if( !checkCorner(c)) {
 				c.edgeIntensity = -1;
@@ -287,6 +308,17 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 				maxIntensityImage,corners.size,filtered.size(),(100*dropped/(double)corners.size));
 	}
 
+	private boolean checkHessian( int cx , int cy ) {
+		GrayF32 img = (GrayF32)blurred;
+
+		float Lxx = img.unsafe_get(cx-2,cy) - 2*img.unsafe_get(cx,cy) + img.unsafe_get(cx+2,cy);
+		float Lyy = img.unsafe_get(cx,cy-2) - 2*img.unsafe_get(cx,cy) + img.unsafe_get(cx,cy+2);
+		float Lxy = img.unsafe_get(cx-1,cy-1) + img.unsafe_get(cx+1,cy+1);
+		Lxy -= img.unsafe_get(cx+1,cy-1) + img.unsafe_get(cx-1,cy+1);
+
+		return Lxx*Lyy-Lxy*Lxy < 0;
+	}
+
 	private boolean checkPositiveInside(int cx , int cy , int threshold ) {
 		int radius = 1;
 		if( cx < radius || cx >= intensity.width-radius || cy < radius || cy >= intensity.height-radius )
@@ -300,7 +332,7 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 		int count=0;
 		for (int y = y0; y < y1; y++) {
 			for (int x = x0; x < x1; x++) {
-				if( intensity.unsafe_get(x,y) >= nonmaxThreshold)
+				if( intensity.unsafe_get(x,y) > 0)
 					count++;
 			}
 		}
@@ -337,15 +369,16 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 //		if( cx < radius || cx >= intensity.width-radius || cy < radius || cy >= intensity.height-radius )
 //			return false;
 
-		float mean = 0;
+		float minVal = Float.MAX_VALUE,maxVal=-Float.MAX_VALUE;
 		for (int i = 0; i < outside.size; i++) {
 			Point2D_I32 p = outside.get(i);
 			float v = inputInterp.get(cx+p.x,cy+p.y);
 			outsideCircleValues[i] = v;
-			mean += v;
+			minVal = Math.min(minVal,v);
+			maxVal = Math.max(maxVal,v);
 		}
-		mean /= outside.size;
 
+		float mean = (minVal+maxVal)/2;
 		// Compute the number of times the pixel value transition below and above the mean
 		// There should be 4 transitions in a chessboard
 		int numUpDown = 0;
@@ -461,7 +494,7 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 	 * offset by 90 degrees.
 	 */
 	private boolean computeFeatures(ChessboardCorner corner) {
-		double r = 4;
+		double r = 3;
 
 		// magnitude of the difference is used remove false chessboard corners caused by the corners on black
 		// squares. In that situation there will be a large difference between the left and right values
@@ -469,27 +502,29 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 		double cx = corner.x;
 		double cy = corner.y;
 		double sumDifference = 0;
-		double mean = 0;
+		double minVal = Double.MAX_VALUE,maxVal=-Double.MAX_VALUE;
 		for (int i = 0; i < numSpokeDiam; i++) {
 			int j = (i+ numSpokeDiam)%numSpokes;
 			double angle = Math.PI*i/ numSpokeDiam;
 			double c = Math.cos(angle);
 			double s = Math.sin(angle);
 
-			double valA = spokesRadi[i] = integral.compute(cx,cy,cx+r*c,cy+r*s)/r;
-			double valB = spokesRadi[j] = integral.compute(cx,cy,cx-r*c,cy-r*s)/r;
+			double valA = spokesRadi[i] = integral.compute(cx+c,cy+s,cx+r*c,cy+r*s)/r;
+			double valB = spokesRadi[j] = integral.compute(cx-c,cy-s,cx-r*c,cy-r*s)/r;
 
 			spokesDiam[i] = valA+valB;
 
 			sumDifference += Math.abs(valA-valB);
-			mean += valA + valB;
+			minVal = Math.min(minVal,valA+valB);
+			maxVal = Math.max(maxVal,valA+valB);
 		}
-		mean /= numSpokes;
+		double mean = (minVal+maxVal)/4;
 		sumDifference /= numSpokeDiam;
 
 		// There should be 4 transitions between above and below the mean
-		if( countTransitions(mean) != 4 )
-			return false;
+//		int a = countTransitions(mean);
+//		if( a < 3 || a > 5 )
+//			return false;
 
 		//
 		smoothSpokeDiam();

@@ -92,6 +92,7 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 
 
 	SaddlePointXCorner saddle = new SaddlePointXCorner();
+	FindTwoXCornerLines xlines = new FindTwoXCornerLines(4);
 
 	// storage for corner detector output
 	GrayF32 intensity = new GrayF32(1,1);
@@ -193,6 +194,8 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 		blurFilter.process(input,blurred);
 		computeIntensity.process3((GrayF32)blurred, intensity);
 
+		xlines.setInput((GrayF32)input);
+
 		intensityInterp.setImage(intensity);
 		inputInterp.setImage((GrayF32)input);
 		blurInterp.setImage((GrayF32)blurred);
@@ -231,6 +234,11 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 
 			if( !checkHessian(xx,yy) )
 				continue;
+
+//			System.out.println("----");
+//			xlines.process((float)c.x,(float)c.y);
+//			if( xlines.intensityRatio < 0.5 )
+//				continue;
 
 			// TODO Remove as many arbitrary thresholds as possible
 			// TODO Check to see if hessian peak too

@@ -23,6 +23,7 @@ import boofcv.alg.filter.derivative.DerivativeType;
 import boofcv.alg.filter.derivative.GImageDerivativeOps;
 import boofcv.alg.interpolate.InterpolatePixelS;
 import boofcv.alg.misc.GImageMiscOps;
+import boofcv.alg.misc.ImageStatistics;
 import boofcv.factory.filter.derivative.FactoryDerivative;
 import boofcv.factory.interpolate.FactoryInterpolation;
 import boofcv.struct.border.BorderType;
@@ -37,6 +38,8 @@ public class FindTwoXCornerLines {
 	// for all lines compute the sum. Use abs of dot product of gradient and line normal
 	// Find two best lines that form an X
 	// Compute total gradient absorbed by the two lines
+
+	GrayF32 input;
 
 	final ImageGradient<GrayF32,GrayF32> gradient;
 
@@ -56,11 +59,14 @@ public class FindTwoXCornerLines {
 	final InterpolatePixelS<GrayF32> interpX = FactoryInterpolation.bilinearPixelS(GrayF32.class,BorderType.EXTENDED);
 	final InterpolatePixelS<GrayF32> interpY = FactoryInterpolation.bilinearPixelS(GrayF32.class,BorderType.EXTENDED);
 
-	int numberOfLines = 20;
-	float[] tcos = new float[numberOfLines];
-	float[] tsin = new float[numberOfLines];
+	final int numberOfLines = 12;
+	final float[] tcos = new float[numberOfLines];
+	final float[] tsin = new float[numberOfLines];
 
-	float[] lineStrength = new float[numberOfLines];
+	final float[] lineStrength = new float[numberOfLines];
+
+	public float intensityRatio;
+	public float intensity;
 
 	public FindTwoXCornerLines( int radius ) {
 		ImageType<GrayF32> imageType = ImageType.single(GrayF32.class);
@@ -83,17 +89,43 @@ public class FindTwoXCornerLines {
 		}
 	}
 
-	public void process( GrayF32 input , int cx , int cy ) {
+	public void setInput( GrayF32 input ) {
+		this.input = input;
+	}
 
-		computeLocalGradient(input, cx, cy);
+	public void process( float cx , float cy ) {
 
+		int icx = (int)(cx+0.5f);
+		int icy = (int)(cy+0.5f);
 
+		computeLocalGradient(input, icx , icy );
+
+		computeEdgeStrengths(cx-icx,cy-icy);
+
+		// TODO select two best lines
+		float maxLine = lineStrength[0];
+		for (int i = 1; i < numberOfLines; i++) {
+			maxLine = Math.max(maxLine,lineStrength[i]);
+		}
+
+		// TODO compute line angle
+
+		float total = ImageStatistics.sumAbs(derivX) + ImageStatistics.sumAbs(derivY);
+		total /= 4; // 3x3 kernels double edges. sum of dot will be average of x and y
+
+		intensity = maxLine;
+		intensityRatio = maxLine/total;
+
+//		System.out.println("two line strengt ratio "+intensityRatio);
+	}
+
+	private void computeEdgeStrengths( float offX , float offY ) {
 		for (int lineIdx = 0; lineIdx < numberOfLines; lineIdx++) {
 			float c = tcos[lineIdx];
 			float s = tsin[lineIdx];
 
-			float xx = radius - c*radius;
-			float yy = radius - s*radius;
+			float xx = offX+radius - c*radius;
+			float yy = offY+radius - s*radius;
 
 			// magnitude of gradient
 			float magnitude = 0;
@@ -112,8 +144,6 @@ public class FindTwoXCornerLines {
 
 			lineStrength[lineIdx] = magnitude;
 		}
-
-		System.out.println("Done");
 	}
 
 	private void computeLocalGradient(GrayF32 input, int cx, int cy) {

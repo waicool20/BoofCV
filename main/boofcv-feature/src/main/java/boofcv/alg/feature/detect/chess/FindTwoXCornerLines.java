@@ -59,7 +59,7 @@ public class FindTwoXCornerLines {
 	final InterpolatePixelS<GrayF32> interpX = FactoryInterpolation.bilinearPixelS(GrayF32.class,BorderType.EXTENDED);
 	final InterpolatePixelS<GrayF32> interpY = FactoryInterpolation.bilinearPixelS(GrayF32.class,BorderType.EXTENDED);
 
-	final int numberOfLines = 12;
+	final int numberOfLines = 24;
 	final float[] tcos = new float[numberOfLines];
 	final float[] tsin = new float[numberOfLines];
 
@@ -67,6 +67,8 @@ public class FindTwoXCornerLines {
 
 	public float intensityRatio;
 	public float intensity;
+
+	public int line0,line1;
 
 	public FindTwoXCornerLines( int radius ) {
 		ImageType<GrayF32> imageType = ImageType.single(GrayF32.class);
@@ -94,6 +96,9 @@ public class FindTwoXCornerLines {
 	}
 
 	public void process( float cx , float cy ) {
+		intensity = 0;
+		intensityRatio = 0;
+		line0 = line1 = -1;
 
 		int icx = (int)(cx+0.5f);
 		int icy = (int)(cy+0.5f);
@@ -104,42 +109,70 @@ public class FindTwoXCornerLines {
 
 		// TODO select two best lines
 		float maxLine = lineStrength[0];
+		line0 = 0;
 		for (int i = 1; i < numberOfLines; i++) {
-			maxLine = Math.max(maxLine,lineStrength[i]);
+			if( maxLine < lineStrength[i] ) {
+				maxLine = lineStrength[i];
+				line0 = i;
+			}
 		}
+
+		float bestScore = 0;
+		line1 = -1;
+		for (int offI = 1; offI < numberOfLines-1; offI++) {
+			float score = score(line0,offI);
+			if( score > bestScore ) {
+				bestScore = score;
+				line1 = offI;
+			}
+		}
+		if( line1 < 0 ) // todo handle failure better
+			return;
+		line1 = (line0+line1)%numberOfLines;
 
 		// TODO compute line angle
 
 		float total = ImageStatistics.sumAbs(derivX) + ImageStatistics.sumAbs(derivY);
-		total /= 4; // 3x3 kernels double edges. sum of dot will be average of x and y
+		total /= 2; // 3x3 kernels double edges.
 
-		intensity = maxLine;
-		intensityRatio = maxLine/total;
+		intensity = (lineStrength[line0]+lineStrength[line1]);
+		intensityRatio = intensity/total;
 
 //		System.out.println("two line strengt ratio "+intensityRatio);
 	}
 
+	private float score( int line0 , int offset ) {
+		int line1 = (line0+offset)%numberOfLines;
+		int low0 = (line0+offset/2)%numberOfLines;
+		int low1 = (line1+(numberOfLines-offset)/2)%numberOfLines;
+
+		float score = lineStrength[line0] + lineStrength[line1];
+		score -= lineStrength[low0] + lineStrength[low1];
+		return score;
+	}
+
 	private void computeEdgeStrengths( float offX , float offY ) {
+		final float xx = offX+radius;
+		final float yy = offY+radius;
+
 		for (int lineIdx = 0; lineIdx < numberOfLines; lineIdx++) {
 			float c = tcos[lineIdx];
 			float s = tsin[lineIdx];
 
-			float xx = offX+radius - c*radius;
-			float yy = offY+radius - s*radius;
-
 			// magnitude of gradient
 			float magnitude = 0;
 
-			for (int i = 0; i < width; i++) {
+			for (int r = 1; r <= radius; r++) {
 				// get gradient at this point along the line
-				float dx = interpX.get(xx,yy);
-				float dy = interpY.get(xx,yy);
-
+				float dx = interpX.get(xx+r*c,yy+r*s);
+				float dy = interpY.get(xx+r*c,yy+r*s);
 				// compute magnitude of dot product along the line's tangent
 				magnitude += Math.abs(dx*s - dy*c);
 
-				xx += c;
-				yy += s;
+				dx = interpX.get(xx-r*c,yy-r*s);
+				dy = interpY.get(xx-r*c,yy-r*s);
+				// compute magnitude of dot product along the line's tangent
+				magnitude += Math.abs(dx*s - dy*c);
 			}
 
 			lineStrength[lineIdx] = magnitude;

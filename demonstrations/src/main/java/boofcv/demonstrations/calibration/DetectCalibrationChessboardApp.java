@@ -128,7 +128,7 @@ public class DetectCalibrationChessboardApp
 				Point2D_F64 p = imagePanel.pixelToPoint(e.getX(), e.getY());
 				if( SwingUtilities.isLeftMouseButton(e)) {
 					System.out.printf("Clicked at %.2f , %.2f\n",p.x,p.y);
-				} else if( SwingUtilities.isRightMouseButton(e) ) {
+				} else if( BoofSwingUtil.isRightClick(e)) {
 					String text = "";
 					// show info for a corner if the user clicked near it
 					if( controlPanel.showCorners ) {
@@ -160,6 +160,9 @@ public class DetectCalibrationChessboardApp
 							}
 						}
 					}
+					if( text.length() == 0 ) {
+						text += String.format("Total Corners %d\n",foundCorners.size);
+					}
 					controlPanel.setInfoText(text);
 				}
 			}
@@ -189,6 +192,7 @@ public class DetectCalibrationChessboardApp
 
 			detector = new CalibrationDetectorChessboard(configDetector,configGridDimen);
 			detector.getDetector().getDetector().useMeanShift = controlPanel.meanShift;
+			detector.getDetector().getDetector().xlinesRatio = (float)controlPanel.xlinesRatio;
 
 			if( controlPanel.anyGrid ) {
 				detector.getClusterToGrid().setCheckShape(null);
@@ -465,6 +469,7 @@ public class DetectCalibrationChessboardApp
 		JSlider sliderTranslucent = new JSlider(JSlider.HORIZONTAL, 0, 100, 0);
 		JCheckBox checkLogIntensity;
 		JSpinner spinnerRadius;
+		JSpinner spinnerXLineRatio;
 		JSpinner spinnerCornerThreshold;
 		JSpinner spinnerEdgeThreshold;
 		JSpinner spinnerTop;
@@ -495,6 +500,7 @@ public class DetectCalibrationChessboardApp
 		int maxDistance;
 		int cornerNonMaxThreshold;
 		double edgeThreshold;
+		double xlinesRatio;
 		double ambiguousTol;
 		double directionTol;
 		double orientationTol;
@@ -516,6 +522,7 @@ public class DetectCalibrationChessboardApp
 				ambiguousTol = configDetector.ambiguousTol;
 				directionTol = configDetector.directionTol;
 				orientationTol = configDetector.orientationTol;
+				xlinesRatio = 0.35;
 
 				cornerNonMaxThreshold = (int)(configDetector.cornerNonMaxThreshold*100);
 				edgeThreshold = configDetector.edgeThreshold;
@@ -528,6 +535,7 @@ public class DetectCalibrationChessboardApp
 			selectZoom = spinner(1.0,MIN_ZOOM,MAX_ZOOM,1.0);
 			checkLogIntensity = checkbox("Log Intensity", logItensity);
 			spinnerCornerThreshold = spinner(cornerNonMaxThreshold, 0, 100, 5);
+			spinnerXLineRatio = spinner(xlinesRatio, 0, 1.0, 0.05,1,3);
 			spinnerEdgeThreshold = spinner(edgeThreshold, 0, 1.0, 0.1,1,3);
 			spinnerRadius = spinner(radius, 1, 100, 1);
 			spinnerTop = spinner(pyramidTop, 0, 10000, 50);
@@ -556,6 +564,7 @@ public class DetectCalibrationChessboardApp
 			controlPanel.addAlignLeft(checkAnyGrid);
 			controlPanel.addLabeled(spinnerRadius,"Corner Radius");
 			controlPanel.addLabeled(spinnerCornerThreshold,"Corner Threshold");
+			controlPanel.addLabeled(spinnerXLineRatio,"XLine Threshold");
 			controlPanel.addLabeled(spinnerEdgeThreshold,"Edge Threshold");
 			controlPanel.addLabeled(spinnerTop,"Pyramid Top");
 			controlPanel.addLabeled(spinnerMaxDistance,"Max Dist.");
@@ -664,6 +673,8 @@ public class DetectCalibrationChessboardApp
 				directionTol = ((Number)spinnerDirectionTol.getValue()).doubleValue();
 			} else if( e.getSource() == spinnerAmbiguous) {
 				ambiguousTol = ((Number) spinnerAmbiguous.getValue()).doubleValue();
+			} else if( e.getSource() == spinnerXLineRatio ) {
+				xlinesRatio = ((Number)spinnerXLineRatio.getValue()).doubleValue();
 			} else if( e.getSource() == spinnerCornerThreshold ) {
 				cornerNonMaxThreshold = ((Number)spinnerCornerThreshold.getValue()).intValue();
 			} else if( e.getSource() == spinnerEdgeThreshold ) {

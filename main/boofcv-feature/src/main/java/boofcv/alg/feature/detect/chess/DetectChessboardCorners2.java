@@ -237,8 +237,8 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 			int xx = (int)(c.x+0.5f);
 			int yy = (int)(c.y+0.5f);
 
-//			if( !checkHessian(xx,yy) )
-//				continue;
+			if( !checkHessian(xx,yy) )
+				continue;
 
 //			System.out.println("----");
 
@@ -264,6 +264,8 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 				xlines.process((float) c.x, (float) c.y);
 				if (xlines.intensityRatio < xlinesRatio)
 					continue;
+//				if( xlines.acuteAngle < 1.0f )
+//					continue;
 			}
 
 			// TODO improve these functions

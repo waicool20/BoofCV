@@ -69,6 +69,7 @@ public class FindTwoXCornerLines {
 	public float intensity;
 
 	public int line0,line1;
+	public float acuteAngle;
 
 	public FindTwoXCornerLines( int radius ) {
 		ImageType<GrayF32> imageType = ImageType.single(GrayF32.class);
@@ -107,7 +108,6 @@ public class FindTwoXCornerLines {
 
 		computeEdgeStrengths(cx-icx,cy-icy);
 
-		// TODO select two best lines
 		float maxLine = lineStrength[0];
 		line0 = 0;
 		for (int i = 1; i < numberOfLines; i++) {
@@ -117,6 +117,7 @@ public class FindTwoXCornerLines {
 			}
 		}
 
+		// TODO identify local peaks and score those only?
 		float bestScore = 0;
 		line1 = -1;
 		for (int offI = 1; offI < numberOfLines-1; offI++) {
@@ -138,7 +139,11 @@ public class FindTwoXCornerLines {
 		intensity = (lineStrength[line0]+lineStrength[line1]);
 		intensityRatio = intensity/total;
 
-//		System.out.println("two line strengt ratio "+intensityRatio);
+//		int iAngle1 = CircularIndex.distanceP(line0,line1,numberOfLines);
+//		int iAngle2 = CircularIndex.distanceP(line1,line0,numberOfLines);
+//		acuteAngle = Math.min(iAngle1,iAngle2)*GrlConstants.F_PI/numberOfLines;
+
+//		System.out.println("two line strength ratio "+intensityRatio);
 	}
 
 	private float score( int line0 , int offset ) {
@@ -166,13 +171,16 @@ public class FindTwoXCornerLines {
 				// get gradient at this point along the line
 				float dx = interpX.get(xx+r*c,yy+r*s);
 				float dy = interpY.get(xx+r*c,yy+r*s);
-				// compute magnitude of dot product along the line's tangent
-				magnitude += Math.abs(dx*s - dy*c);
+				// dot product along line's tangent. For a true gradient from the line the magnitude should be
+				// maximized here
+				float dot1 = dx*s - dy*c;
 
 				dx = interpX.get(xx-r*c,yy-r*s);
 				dy = interpY.get(xx-r*c,yy-r*s);
-				// compute magnitude of dot product along the line's tangent
-				magnitude += Math.abs(dx*s - dy*c);
+				float dot2 = dx*s - dy*c;
+
+				// the signs of the two dot products should be opposite of each other
+				magnitude += Math.abs(dot1-dot2);
 			}
 
 			lineStrength[lineIdx] = magnitude;

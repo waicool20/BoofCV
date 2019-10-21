@@ -92,6 +92,8 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 
 
 	SaddlePointXCorner saddle = new SaddlePointXCorner();
+	FindTwoXCornerLines xlines = new FindTwoXCornerLines(4);
+	public float xlinesRatio = 0.35f;
 
 	// storage for corner detector output
 	GrayF32 intensity = new GrayF32(1,1);
@@ -193,6 +195,8 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 		blurFilter.process(input,blurred);
 		computeIntensity.process3((GrayF32)blurred, intensity);
 
+		xlines.setInput((GrayF32)input);
+
 		intensityInterp.setImage(intensity);
 		inputInterp.setImage((GrayF32)input);
 		blurInterp.setImage((GrayF32)blurred);
@@ -226,11 +230,17 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 		for (int i = 0; i < corners.size(); i++) {
 			ChessboardCorner c = corners.get(i);
 
+//			if( c.distance(  156.4 ,   325.2) < 2) {
+//				System.out.println("Found it");
+//			}
+
 			int xx = (int)(c.x+0.5f);
 			int yy = (int)(c.y+0.5f);
 
-			if( !checkHessian(xx,yy) )
-				continue;
+//			if( !checkHessian(xx,yy) )
+//				continue;
+
+//			System.out.println("----");
 
 			// TODO Remove as many arbitrary thresholds as possible
 			// TODO Check to see if hessian peak too
@@ -243,6 +253,17 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 
 			if( !checkNegativeInside(xx,yy,12)) {
 				continue;
+			}
+
+			if( xlinesRatio > 0.0f ) {
+				// TODO alternative that will work better on blurred lines
+				// take grid. rotate into X-Lines coordinate system
+				//            hmm how to handle when not 90 degrees?
+				// pre-compute which point is closest to which line
+				// apply dot product
+				xlines.process((float) c.x, (float) c.y);
+				if (xlines.intensityRatio < xlinesRatio)
+					continue;
 			}
 
 			// TODO improve these functions
@@ -262,6 +283,10 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 				c.x = meanShift.getPeakX();
 				c.y = meanShift.getPeakY();
 			}
+
+//			xlines.process((float)c.x,(float)c.y);
+//			if( xlines.intensityRatio < 0.4 )
+//				continue;
 
 //			if( !saddle.process((int)(c.x+0.5),(int)(c.y+0.5))) {
 //				continue;
@@ -354,7 +379,7 @@ public class DetectChessboardCorners2<T extends ImageGray<T>> {
 		int count=0;
 		for (int y = y0; y < y1; y++) {
 			for (int x = x0; x < x1; x++) {
-				if( intensity.unsafe_get(x,y) <= -nonmaxThreshold )
+				if( intensity.unsafe_get(x,y) < 0.0f )
 					count++;
 			}
 		}

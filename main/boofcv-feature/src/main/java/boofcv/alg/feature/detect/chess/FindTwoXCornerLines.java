@@ -30,6 +30,7 @@ import boofcv.struct.border.BorderType;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.ImageType;
 
+
 /**
  * @author Peter Abeles
  */

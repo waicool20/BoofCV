@@ -6,3 +6,4 @@
 **/*.ipr
 .DS_Store
 BoofVersion.java
+**/build/*
